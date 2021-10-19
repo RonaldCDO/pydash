@@ -41,8 +41,10 @@ class Player(SimpleModule):
 
         config_parser = ConfigurationParser.get_instance()
 
-        self.buffering_until = int(config_parser.get_parameter('buffering_until'))
-        self.max_buffer_size = int(config_parser.get_parameter('max_buffer_size'))
+        self.buffering_until = int(
+            config_parser.get_parameter('buffering_until'))
+        self.max_buffer_size = int(
+            config_parser.get_parameter('max_buffer_size'))
         self.playback_step = int(config_parser.get_parameter('playbak_step'))
         self.url_mpd = config_parser.get_parameter('url_mpd')
 
@@ -74,7 +76,8 @@ class Player(SimpleModule):
         self.timer = Timer.get_instance()
 
         # threading playback
-        self.playback_thread = threading.Thread(target=self.handle_video_playback)
+        self.playback_thread = threading.Thread(
+            target=self.handle_video_playback)
         self.player_thread_events = threading.Event()
         self.lock = threading.Lock()
         self.kill_playback_thread = False
@@ -93,9 +96,11 @@ class Player(SimpleModule):
         self.whiteboard.add_playback_history(self.playback.get_items())
         self.whiteboard.add_playback_qi(self.playback_qi.get_items())
         self.whiteboard.add_playback_pauses(self.playback_pauses.get_items())
-        self.whiteboard.add_playback_buffer_size(self.playback_buffer_size.get_items())
+        self.whiteboard.add_playback_buffer_size(
+            self.playback_buffer_size.get_items())
         self.whiteboard.add_buffer(self.buffer)
-        self.whiteboard.add_playback_segment_size_time_at_buffer(self.playback_segment_size_time_at_buffer)
+        self.whiteboard.add_playback_segment_size_time_at_buffer(
+            self.playback_segment_size_time_at_buffer)
         self.whiteboard.add_max_buffer_size(self.max_buffer_size)
 
     def get_qi(self, quality_qi):
@@ -159,7 +164,8 @@ class Player(SimpleModule):
 
                 buffer_size = self.get_amount_of_video_to_play_without_lock()
                 self.playback_buffer_size.add(current_time, buffer_size)
-                print(f'Execution Time {current_time} > buffer size: {buffer_size}')
+                print(
+                    f'Execution Time {current_time} > buffer size: {buffer_size}')
 
                 if self.pause_started_at is not None:
                     # pause_time = (time.time_ns() - self.pause_started_at) * 1e-9
@@ -179,7 +185,8 @@ class Player(SimpleModule):
             self.lock.release()
 
             if (not threading.main_thread().is_alive() or self.kill_playback_thread) and buffer_size <= 0:
-                print(f'Execution Time {current_time}  thread {threading.get_ident()} will be killed.')
+                print(
+                    f'Execution Time {current_time}  thread {threading.get_ident()} will be killed.')
                 break
 
             # playback steps
@@ -193,7 +200,8 @@ class Player(SimpleModule):
             raise ValueError(f'buffer: {buffer_size}, {msg}')
 
         # adding the segment in the buffer
-        self.store_in_buffer(self.get_qi(msg.get_quality_id()), msg.get_segment_size())
+        self.store_in_buffer(self.get_qi(
+            msg.get_quality_id()), msg.get_segment_size())
 
         # statistical purpose
         current_time = self.timer.get_current_time()
@@ -203,7 +211,8 @@ class Player(SimpleModule):
 
         if self.buffer_initialization and self.get_amount_of_video_to_play() >= self.buffering_until:
             self.buffer_initialization = False
-            print(f'Execution Time {self.timer.get_current_time()} buffering process is concluded')
+            print(
+                f'Execution Time {self.timer.get_current_time()} buffering process is concluded')
             self.playback_thread.start()
 
     def store_in_buffer(self, qi, segment_size):
@@ -214,12 +223,14 @@ class Player(SimpleModule):
             self.buffer.append(qi)
 
             # logging the time the segment size was written in the buffer
-            self.playback_segment_size_time_at_buffer.append([current_time, -1])
+            self.playback_segment_size_time_at_buffer.append(
+                [current_time, -1])
         self.lock.release()
 
     def request_next_segment(self):
         if self.already_downloading:
-            raise ValueError('Something doesn\'t look right, a segment is already being downloaded!')
+            raise ValueError(
+                'Something doesn\'t look right, a segment is already being downloaded!')
 
         self.request_time = time.perf_counter()
         # self.request_time = self.timer.get_current_time()
@@ -228,8 +239,10 @@ class Player(SimpleModule):
         url_tokens = self.url_mpd.split('/')
 
         segment_request.add_host_name(url_tokens[2])
-        segment_request.add_path_name('/'.join(url_tokens[:len(url_tokens) - 1]))
-        segment_request.add_media_mpd(navigate_mpd(self.parsed_mpd, 'media')[1])
+        segment_request.add_path_name(
+            '/'.join(url_tokens[:len(url_tokens) - 1]))
+        segment_request.add_media_mpd(
+            navigate_mpd(self.parsed_mpd, 'media')[1])
         segment_request.add_segment_id(self.segment_id)
 
         self.segment_id += 1
@@ -237,7 +250,8 @@ class Player(SimpleModule):
         # set status to downloading a segment
         self.already_downloading = True
 
-        print(f'Execution Time {self.timer.get_current_time()} > request: {segment_request}')
+        print(
+            f'Execution Time {self.timer.get_current_time()} > request: {segment_request}')
 
         self.send_down(segment_request)
 
@@ -252,16 +266,20 @@ class Player(SimpleModule):
 
         if self.pauses_number > 1:
             pauses = [i[1] for i in self.playback_pauses.get_items()]
-            print(f'  >> Average Time Pauses: {round(statistics.mean(pauses), 2)}')
-            print(f'  >> Standard deviation: {round(statistics.stdev(pauses), 2)}')
+            print(
+                f'  >> Average Time Pauses: {round(statistics.mean(pauses), 2)}')
+            print(
+                f'  >> Standard deviation: {round(statistics.stdev(pauses), 2)}')
             print(f'  >> Variance: {round(statistics.variance(pauses), 2)}')
 
         playback_qi = [i[1] for i in self.playback_qi.get_items()]
 
         if len(playback_qi) > 1:
             print(f'Average QI: {round(statistics.mean(playback_qi), 2)}')
-            print(f'  >> Standard deviation: {round(statistics.stdev(playback_qi), 2)}')
-            print(f'  >> Variance: {round(statistics.variance(playback_qi), 2)}')
+            print(
+                f'  >> Standard deviation: {round(statistics.stdev(playback_qi), 2)}')
+            print(
+                f'  >> Variance: {round(statistics.variance(playback_qi), 2)}')
 
         diff = []
         for i in range(len(playback_qi) - 1):
@@ -269,7 +287,8 @@ class Player(SimpleModule):
 
         if len(diff) > 1:
             print(f'Average QI distance: {round(statistics.mean(diff), 2)}')
-            print(f'  >> Standard deviation: {round(statistics.stdev(diff), 2)}')
+            print(
+                f'  >> Standard deviation: {round(statistics.stdev(diff), 2)}')
             print(f'  >> Variance: {round(statistics.variance(diff), 2)}')
 
         [os.remove(f) for f in glob.glob('./results/*.png')]
@@ -288,11 +307,13 @@ class Player(SimpleModule):
         current_time = self.timer.get_current_time()
         print(f'Execution Time {current_time} > received: {msg}')
 
-        if msg.found():
-            measured_throughput = msg.get_bit_length() / (time.perf_counter() - self.request_time)
+        if msg.found() and msg.get_segment_id() <= 30:
+            measured_throughput = msg.get_bit_length(
+            ) / (time.perf_counter() - self.request_time)
             self.throughput.add(current_time, measured_throughput)
 
-            print(f'Execution Time {self.timer.get_current_time()} > measured throughput: {measured_throughput}')
+            print(
+                f'Execution Time {self.timer.get_current_time()} > measured throughput: {measured_throughput}')
 
             # self.throughput.add(current_time, msg.get_bit_length() /(current_time - self.request_time))
             self.buffering_video_segment(msg)
@@ -314,7 +335,8 @@ class Player(SimpleModule):
                 self.playback_thread.join()
             '''
         else:
-            print(f'Execution Time {current_time} All video\'s segments was downloaded')
+            print(
+                f'Execution Time {current_time} All video\'s segments was downloaded')
             self.kill_playback_thread = True
             if self.playback_thread.is_alive():
                 self.playback_thread.join()
@@ -342,16 +364,20 @@ class Player(SimpleModule):
         #fact = self.__multiplication_factor(self.playback_quality_qi.items)
         #self.playback_quality_qi.items = [(x, i / fact[0]) for x, i in self.playback_quality_qi.items]
 
-
         fact = self.__multiplication_factor(self.throughput.items)
-        self.throughput.items = [(x, i / fact[0]) for x, i in self.throughput.items]
-        self.logVlines(self.throughput, 'throughput', 'Throughput Variation', fact[1])
+        self.throughput.items = [(x, i / fact[0])
+                                 for x, i in self.throughput.items]
+        self.logVlines(self.throughput, 'throughput',
+                       'Throughput Variation', fact[1])
 
-        self.log(self.playback_quality_qi, 'playback_quality_qi', 'Quality QI', 'Mbps')
-        self.log(self.playback_pauses, 'playback_pauses', 'Pauses Size (seconds)', 'Pauses Size')
+        self.log(self.playback_quality_qi,
+                 'playback_quality_qi', 'Quality QI', 'Mbps')
+        self.log(self.playback_pauses, 'playback_pauses',
+                 'Pauses Size (seconds)', 'Pauses Size')
         self.log(self.playback, 'playback', 'Playback History', 'on/off')
         self.log(self.playback_qi, 'playback_qi', 'Quality Index', 'QI')
-        self.log(self.playback_buffer_size, 'playback_buffer_size', 'Buffer Size', 'seconds')
+        self.log(self.playback_buffer_size,
+                 'playback_buffer_size', 'Buffer Size', 'seconds')
 
     def log(self, log, file_name, title, y_axis, x_axis='execution time (s)'):
         items = log.items
