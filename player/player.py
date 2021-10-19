@@ -16,6 +16,8 @@ import time
 from matplotlib import pyplot as plt
 import statistics
 
+import sys
+
 from base.configuration_parser import ConfigurationParser
 from base.message import *
 from base.simple_module import SimpleModule
@@ -307,7 +309,12 @@ class Player(SimpleModule):
         current_time = self.timer.get_current_time()
         print(f'Execution Time {current_time} > received: {msg}')
 
-        if msg.found() and msg.get_segment_id() <= 30:
+        if len(sys.argv) > 1:
+            maximum_shown_time = int(sys.argv[1])
+        else:
+            maximum_shown_time = 30
+
+        if msg.found() and msg.get_segment_id() < maximum_shown_time:
             measured_throughput = msg.get_bit_length(
             ) / (time.perf_counter() - self.request_time)
             self.throughput.add(current_time, measured_throughput)
@@ -367,10 +374,10 @@ class Player(SimpleModule):
         fact = self.__multiplication_factor(self.throughput.items)
         self.throughput.items = [(x, i / fact[0])
                                  for x, i in self.throughput.items]
-        self.logVlines(self.throughput, 'throughput',
-                       'Throughput Variation', fact[1])
+        self.log(self.throughput, 'throughput',
+                 'Throughput Variation', fact[1])
 
-        #self.log(self.playback_quality_qi,
+        # self.log(self.playback_quality_qi,
         #         'playback_quality_qi', 'Quality QI', 'Mbps')
         self.log(self.playback_pauses, 'playback_pauses',
                  'Pauses Size (seconds)', 'Pauses Size')
@@ -396,6 +403,7 @@ class Player(SimpleModule):
         plt.ylabel(y_axis)
         plt.title(title)
         plt.ylim(min(y), max(y) * 4 / 3)
+        plt.xlim(left=min(x))
 
         plt.savefig(f'./results/{file_name}.png')
         plt.clf()
