@@ -370,8 +370,8 @@ class Player(SimpleModule):
         self.logVlines(self.throughput, 'throughput',
                        'Throughput Variation', fact[1])
 
-        self.log(self.playback_quality_qi,
-                 'playback_quality_qi', 'Quality QI', 'Mbps')
+        #self.log(self.playback_quality_qi,
+        #         'playback_quality_qi', 'Quality QI', 'Mbps')
         self.log(self.playback_pauses, 'playback_pauses',
                  'Pauses Size (seconds)', 'Pauses Size')
         self.log(self.playback, 'playback', 'Playback History', 'on/off')
