@@ -343,7 +343,7 @@ class Player(SimpleModule):
             '''
         else:
             print(
-                f'Execution Time {current_time} All video\'s segments was downloaded')
+                f'Execution Time {current_time} All video\'s segments were downloaded')
             self.kill_playback_thread = True
             if self.playback_thread.is_alive():
                 self.playback_thread.join()
@@ -374,8 +374,8 @@ class Player(SimpleModule):
         fact = self.__multiplication_factor(self.throughput.items)
         self.throughput.items = [(x, i / fact[0])
                                  for x, i in self.throughput.items]
-        self.log(self.throughput, 'throughput',
-                 'Throughput Variation', fact[1])
+        self.logVlines(self.throughput, 'throughput',
+                       'Throughput Variation', fact[1])
 
         # self.log(self.playback_quality_qi,
         #         'playback_quality_qi', 'Quality QI', 'Mbps')

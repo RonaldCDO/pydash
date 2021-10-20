@@ -18,7 +18,11 @@ class R2A_Custom(IR2A):
         self.throughputs = []
         self.last_throughtput = 0
 
+        self.alpha = 0.3
+        self.exp_avg_throughput = 0
+
         self.last_quality = 0
+        self.last_buffer_size = 0
 
         self.DANGER_ZONE = 5
         self.INCREASE_ZONE = 10
@@ -28,13 +32,14 @@ class R2A_Custom(IR2A):
         self.send_down(msg)
 
     def handle_xml_response(self, msg):
-        # getting qi list
         self.parsed_mpd = parse_mpd(msg.get_payload())
         self.qi = self.parsed_mpd.get_qi()
 
         t = time.perf_counter() - self.request_time
         self.last_throughtput = msg.get_bit_length() / t
         self.throughputs.append(self.last_throughtput)
+
+        self.exp_avg_throughput = self.alpha * self.last_throughtput
 
         self.send_up(msg)
 
@@ -50,18 +55,45 @@ class R2A_Custom(IR2A):
         self.request_time = time.perf_counter()
 
         buffer_size = self.whiteboard.get_amount_video_to_play()
+        buffer_size_variation = buffer_size - self.last_buffer_size
 
         # selected_qi = self.get_quality_under(self.last_throughtput)
 
         selected_qi = self.last_quality
 
-        if buffer_size <= self.DANGER_ZONE:
-            selected_qi = int(selected_qi / 2)
-        elif buffer_size > self.INCREASE_ZONE:
-            selected_qi += 2 * self.get_quality_under(self.last_throughtput)
-            selected_qi = int(selected_qi / 3)
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", self.exp_avg_throughput,
+              buffer_size_variation, buffer_size, selected_qi)
 
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", buffer_size, selected_qi)
+        # avoid choosing higher qualities in the beginning
+        if len(self.whiteboard.get_buffer()) < self.DANGER_ZONE:
+            self.last_quality = 0
+            self.last_buffer_size = buffer_size
+
+            msg.add_quality_id(self.qi[0])
+            self.send_down(msg)
+
+            return
+
+        selected_qi = self.get_quality_under(self.exp_avg_throughput)
+
+        # if buffer_size <= self.DANGER_ZONE:
+        #     selected_qi = int(selected_qi / 2)
+        # elif buffer_size >= self.INCREASE_ZONE:
+        #     selected_qi += 2
+        #     selected_qi = min(
+        #         selected_qi, self.get_quality_under(self.exp_avg_throughput))
+        #     selected_qi = min(selected_qi, len(self.qi) - 1)
+        # elif buffer_size_variation <= -2:
+        #     selected_qi -= 5
+        #     selected_qi = max(
+        #         selected_qi, self.get_quality_under(self.exp_avg_throughput))
+        #     selected_qi = max(0, selected_qi)
+
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              buffer_size_variation, buffer_size, selected_qi)
+
+        self.last_quality = selected_qi
+        self.last_buffer_size = buffer_size
 
         msg.add_quality_id(self.qi[selected_qi])
         self.send_down(msg)
@@ -69,6 +101,11 @@ class R2A_Custom(IR2A):
     def handle_segment_size_response(self, msg):
         t = time.perf_counter() - self.request_time
         self.last_throughtput = msg.get_bit_length() / t
+
+        self.exp_avg_throughput *= (1 - self.alpha)
+        self.exp_avg_throughput = int(
+            self.exp_avg_throughput + self.alpha * self.last_throughtput)
+
         self.send_up(msg)
 
     def initialize(self):

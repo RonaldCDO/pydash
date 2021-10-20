@@ -32,8 +32,10 @@ class ConnectionHandler(SimpleModule):
 
         # for traffic shaping
         config_parser = ConfigurationParser.get_instance()
-        self.traffic_shaping_interval = int(config_parser.get_parameter('traffic_shaping_profile_interval'))
-        self.traffic_shaping_seed = int(config_parser.get_parameter('traffic_shaping_seed'))
+        self.traffic_shaping_interval = int(
+            config_parser.get_parameter('traffic_shaping_profile_interval'))
+        self.traffic_shaping_seed = int(
+            config_parser.get_parameter('traffic_shaping_seed'))
         self.traffic_shaping_values = []
 
         # mark the current traffic shapping interval
@@ -56,20 +58,18 @@ class ConnectionHandler(SimpleModule):
 
         self.timer = Timer.get_instance()
 
-    def get_traffic_shaping_positions(self):
-        current_tsi = self.timer.get_current_time() // self.traffic_shaping_interval
+    def get_traffic_shaping_positions(self, delta_time=0):
+        current_tsi = (self.timer.get_current_time() +
+                       delta_time) // self.traffic_shaping_interval
 
         if current_tsi > self.current_traffic_shaping_interval:
             self.current_traffic_shaping_interval = current_tsi
-            self.tss_position = (self.tss_position + 1) % len(self.traffic_shaping_sequence)
+            self.tss_position = (self.tss_position + 1) \
+                % len(self.traffic_shaping_sequence)
 
-        self.tsv_position = (self.tsv_position + 1) % len(self.traffic_shaping_values[0])
+        self.tsv_position = (self.tsv_position + 1) \
+            % len(self.traffic_shaping_values[0])
 
-        return self.tss_position, self.tsv_position
-
-    def __get_next_traffic_shaping_positions(self):
-        self.tss_position = (self.tss_position + 1) % len(self.traffic_shaping_sequence)
-        self.tsv_position = (self.tsv_position + 1) % len(self.traffic_shaping_values[0])
         return self.tss_position, self.tsv_position
 
     def initialize(self):
@@ -82,6 +82,7 @@ class ConnectionHandler(SimpleModule):
 
         tsp = self.get_traffic_shaping_positions()
         target_throughput = self.traffic_shaping_values[self.traffic_shaping_sequence[tsp[0]]][tsp[1]]
+        print(tsp, "tt", target_throughput)
 
         rtt = time.perf_counter() - self.initial_time
         throughput = package_size / rtt
@@ -90,7 +91,8 @@ class ConnectionHandler(SimpleModule):
         if target_throughput >= throughput:
             return
 
-        waiting_time = (package_size - (target_throughput * rtt)) / target_throughput
+        waiting_time = (package_size - (target_throughput * rtt)
+                        ) / target_throughput
 
         st_data = []
         if waiting_time > self.traffic_shaping_interval:
@@ -100,16 +102,22 @@ class ConnectionHandler(SimpleModule):
             st_data.append((target_throughput, self.traffic_shaping_interval))
 
             while length > 0:
-                tsp = self.__get_next_traffic_shaping_positions()
-                target_throughput = self.traffic_shaping_values[self.traffic_shaping_sequence[tsp[0]]][tsp[1]]
+                tsp = self.get_traffic_shaping_positions(waiting_time)
+                target_throughput = self.traffic_shaping_values[
+                    self.traffic_shaping_sequence[tsp[0]]][tsp[1]]
+                print(tsp, "tt", target_throughput)
 
                 t = length / target_throughput
 
                 if t > self.traffic_shaping_interval:
+                    print("if")
                     waiting_time += self.traffic_shaping_interval
-                    length = length - (self.traffic_shaping_interval * target_throughput)
-                    st_data.append((target_throughput, self.traffic_shaping_interval))
+                    length = length - \
+                        (self.traffic_shaping_interval * target_throughput)
+                    st_data.append(
+                        (target_throughput, self.traffic_shaping_interval))
                 else:
+                    print("else")
                     waiting_time += t
                     length = length - (t * target_throughput)
                     st_data.append((target_throughput, t))
@@ -117,10 +125,10 @@ class ConnectionHandler(SimpleModule):
         time.sleep(waiting_time)
 
         if len(st_data) > 0:
-            target_throughput = package_size / (time.perf_counter() - self.initial_time)
+            target_throughput = package_size / \
+                (time.perf_counter() - self.initial_time)
 
-        #print(f'Execution Time {self.timer.get_current_time()} > target throughput: {target_throughput} - {st_data}')
-
+        # print(f'Execution Time {self.timer.get_current_time()} > target throughput: {target_throughput} - {st_data}')
 
     def finalization(self):
         pass
@@ -143,7 +151,8 @@ class ConnectionHandler(SimpleModule):
         except Exception as err:
             print('> Houston, we have a problem!')
             print(f'> trying to connecto to: {msg.get_payload()}')
-            print(f'Execution Time {self.timer.get_current_time()} > msg obj: {msg}')
+            print(
+                f'Execution Time {self.timer.get_current_time()} > msg obj: {msg}')
             print(err)
             exit(-1)
 
@@ -174,7 +183,8 @@ class ConnectionHandler(SimpleModule):
         ss_file = ''
         self.initial_time = time.perf_counter()
 
-        print(f'Execution Time {self.timer.get_current_time()} > selected QI: {self.qi.index(msg.get_quality_id())}')
+        print(
+            f'Execution Time {self.timer.get_current_time()} > selected QI: {self.qi.index(msg.get_quality_id())}')
 
         try:
             connection = http.client.HTTPConnection(host_name, port)
@@ -184,7 +194,8 @@ class ConnectionHandler(SimpleModule):
         except Exception as err:
             print('> Houston, we have a problem!')
             print(f'> trying to connecto to: {msg.get_payload()}')
-            print(f'Execution Time {self.timer.get_current_time()} > msg obj: {msg}')
+            print(
+                f'Execution Time {self.timer.get_current_time()} > msg obj: {msg}')
             print(err)
             exit(-1)
 
