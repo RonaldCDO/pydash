@@ -41,6 +41,7 @@ class R2A_Panda(IR2A):
         throughput = msg.get_bit_length() / self.T_til[-1]
         print(f'Throughput >>>>>>>>>>>>> {throughput}')
         if self.First_Run:
+            throughput = min(throughput, self.qi[9])
             self.X_til.append(throughput)
             self.X_chapeu.append(throughput)
             self.Y.append(throughput)
