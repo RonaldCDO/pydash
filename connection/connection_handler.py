@@ -82,7 +82,6 @@ class ConnectionHandler(SimpleModule):
 
         tsp = self.get_traffic_shaping_positions()
         target_throughput = self.traffic_shaping_values[self.traffic_shaping_sequence[tsp[0]]][tsp[1]]
-        print(tsp, "tt", target_throughput)
 
         rtt = time.perf_counter() - self.initial_time
         throughput = package_size / rtt
@@ -105,19 +104,16 @@ class ConnectionHandler(SimpleModule):
                 tsp = self.get_traffic_shaping_positions(waiting_time)
                 target_throughput = self.traffic_shaping_values[
                     self.traffic_shaping_sequence[tsp[0]]][tsp[1]]
-                print(tsp, "tt", target_throughput)
 
                 t = length / target_throughput
 
                 if t > self.traffic_shaping_interval:
-                    print("if")
                     waiting_time += self.traffic_shaping_interval
                     length = length - \
                         (self.traffic_shaping_interval * target_throughput)
                     st_data.append(
                         (target_throughput, self.traffic_shaping_interval))
                 else:
-                    print("else")
                     waiting_time += t
                     length = length - (t * target_throughput)
                     st_data.append((target_throughput, t))
