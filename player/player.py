@@ -311,6 +311,8 @@ class Player(SimpleModule):
 
         if len(sys.argv) > 1:
             maximum_shown_time = int(sys.argv[1])
+            if(maximum_shown_time == 0):
+                maximum_shown_time = sys.maxsize
         else:
             maximum_shown_time = 30
 
