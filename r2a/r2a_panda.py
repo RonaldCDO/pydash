@@ -1,26 +1,16 @@
-# -*- coding: utf-8 -*-
-
 from typing_extensions import runtime
 from xml.etree.ElementTree import SubElement
 from player.parser import *
 from r2a.ir2a import IR2A
 
 import time
-import sys
-import math
 
-global kappa, omega, alpha, epsilon, e, grace_time
+global kappa, omega, alpha, epsilon, e, grace_time, beta
 kappa = 0.14
-omega = 10000
+omega = 0.3
 alpha = 0.2
 epsilon = 0.15
-e = math.e
-grace_time = 2.5
-
-
-def mean(l):
-    return sum(l) / len(l)
-
+beta = 0.2
 
 class R2A_Panda(IR2A):
 
@@ -29,21 +19,20 @@ class R2A_Panda(IR2A):
         self.parsed_mpd = ''
         self.qi = []
 
-        self.request_time = 0
+        self.buffer_size = 26
 
+        self.request_time = 0
         self.T = []
+        self.T_estimado = [0]
         self.X_chapeu = []
         self.X_til = []
-
         self.Y = []
-
         self.r = []
 
         self.first_time_running = True
 
     def handle_xml_request(self, msg):
         self.request_time = time.perf_counter()
-        self.last_request_time = self.request_time
 
         self.send_down(msg)
 
@@ -55,8 +44,11 @@ class R2A_Panda(IR2A):
         t = time.perf_counter() - self.request_time
         self.T.append(t)
 
-        throughput = msg.get_bit_length() / t
+        throughput = msg.get_bit_length() / self.T[-1]
         self.X_til.append(throughput)
+        self.X_chapeu.append(throughput)
+        self.Y.append(throughput)
+        self.r.append(self.get_quality_under(throughput))
 
         self.send_up(msg)
 
@@ -70,78 +62,92 @@ class R2A_Panda(IR2A):
         return selected_qi
 
     def handle_segment_size_request(self, msg):
+
+        buffer_list = self.whiteboard.get_playback_buffer_size()
+
+        if len(buffer_list) == 0:
+            msg.add_quality_id(self.qi[0])
+            self.r.append(self.qi[0])
+            t = max(self.T[-1], self.T_estimado[-1])
+            if self.Y[-1] < self.X_til[-1]:
+                vazao = self.Y[-1] + (t * kappa * (omega + max(0, (self.X_til[-1] - self.X_chapeu[-1] + omega))))
+            else:
+                vazao = self.Y[-1] + (t * kappa * (omega - max(0, (self.Y[-1] - self.X_til[-1] + omega))))
+            self.X_chapeu.append(max(vazao, self.qi[0]))
+            vazao_suavizada = ((beta * (self.Y[-1] - self.X_chapeu[-1])) * t) + self.Y[-1]
+            self.Y.append(vazao_suavizada)
+
+        elif len(buffer_list) != 0:
+            buffer_list = self.whiteboard.get_playback_buffer_size()
+            if len(buffer_list) < 2:
+                buffer = buffer_list[-1]
+                buffer_antigo = buffer
+            else:
+                buffer = buffer_list[-1]
+                buffer_antigo = buffer_list[-2]
+
+            t = max(self.T[-1], self.T_estimado[-1])
+            if self.Y[-1] < self.X_til[-1]:
+                vazao = self.Y[-1] + (
+                        t * kappa * (omega + max(0, (self.X_til[-1] - self.X_chapeu[-1] + omega))))
+                self.X_chapeu.append(vazao)
+            else:
+                vazao = self.X_chapeu[-1] + (
+                                (t) * kappa * (omega - max(0, (self.Y[-1] - self.X_til[-1] + omega))))
+                self.X_chapeu.append(vazao)
+            vazao_suavizada = ((-alpha * (self.Y[-1] - self.X_chapeu[-1])) * t) + self.Y[-1]
+            self.Y.append(vazao_suavizada)
+
+            delta_up = epsilon * vazao_suavizada
+            delta_down = 0
+            r_up = -1
+            r_down = -1
+
+            if (vazao_suavizada - delta_up) < self.qi[0] and buffer[1] < buffer_antigo[1]:
+                r_up = 0
+            elif (vazao_suavizada - delta_up) < self.qi[0] and buffer[1] >= buffer_antigo[1]:
+                r_up = 1
+
+            if (vazao_suavizada - delta_down) < self.qi[0] and buffer[1] < buffer_antigo[1]:
+                r_down = 0
+            elif (vazao_suavizada - delta_down) < self.qi[0] and buffer[1] >= buffer_antigo[1]:
+                r_down = 1
+
+            for i in range(19, -1, -1):
+                if (vazao_suavizada - delta_up) >= self.qi[i] and r_up == -1:
+                    r_up = i
+                if (vazao_suavizada - delta_down) >= self.qi[i] and r_down == -1:
+                    r_down = i
+
+            r_1 = self.r[-1]
+
+            if buffer[1] <= 1:
+                r = 0
+            elif r_1 < r_up:
+                r = r_up
+            elif r_up <= r_1 <= r_down:
+                r = r_1
+            else:
+                r = r_down
+
+            self.r.append(r)
+            msg.add_quality_id(self.qi[r])
+
+        if len(buffer_list) == 0:
+            buffer = [0, 0]
+        else:
+            buffer = buffer_list[-1]
+        tempo = (self.r[-1] / self.Y[-1]) + (beta * (buffer[1] - self.buffer_size))
+        self.T_estimado.append(tempo)
+
         self.request_time = time.perf_counter()
 
-        buffer_bias = math.log(
-            max(1, self.whiteboard.get_amount_video_to_play()), e)
-
-        t_chapeu = self.request_time - self.last_request_time
-
-        self.T[-1] = max(t_chapeu, self.T[-1])
-
-        if(self.first_time_running):
-            self.first_time_running = False
-
-            msg.add_quality_id(self.qi[0])
-            self.X_chapeu.append(self.qi[0])
-            self.Y.append(self.X_chapeu[-1])
-            self.r.append(self.qi[0])
-            self.send_down(msg)
-            self.last_request_time = self.request_time
-            return
-
-        X_chapeu_atual_max = max(0, self.X_chapeu[-1] - self.X_til[-1] + omega)
-
-        time_bias = (e ** ((self.T[-1] - grace_time) / 2.5))
-
-        X_chapeu_atual = self.X_chapeu[-1] + \
-            omega * buffer_bias -\
-            kappa * X_chapeu_atual_max * time_bias
-
-        print(
-            f"{self.X_chapeu[-1]} + {omega} * {buffer_bias} - {kappa} * {X_chapeu_atual_max} * {time_bias}", X_chapeu_atual_max)
-        print(
-            f"{self.X_chapeu[-1]} + {omega * buffer_bias} - {kappa * X_chapeu_atual_max * time_bias}", X_chapeu_atual_max)
-
-        X_chapeu_atual = max(0, X_chapeu_atual)
-
-        self.X_chapeu.append(X_chapeu_atual)
-
-        Y_atual = self.Y[-1] - alpha * self.T[-1] * (self.Y[-1]-X_chapeu_atual)
-
-        self.Y.append(Y_atual)
-
-        r_up = self.qi[self.get_quality_under(
-            Y_atual - epsilon * mean(self.Y))]
-        r_down = self.qi[self.get_quality_under(Y_atual)]
-
-        if(r_up > self.r[-1]):
-            r = r_up
-        elif(self.r[-1] > r_down):
-            r = r_down
-        else:
-            r = self.r[-1]
-
-        self.r.append(r)
-
-        print("X_chapeu ", self.X_chapeu[-5:])
-        print("X_til ", self.X_til[-5:])
-        print("Y ", self.Y[-5:])
-        print("T ", self.T[-5:])
-        print("r_up ", r_up)
-        print("r_down ", r_down)
-        print("r ", self.r[-5:])
-
-        self.last_request_time = self.request_time
-
-        msg.add_quality_id(int(r))
         self.send_down(msg)
 
     def handle_segment_size_response(self, msg):
-        t_til = time.perf_counter() - self.request_time
-        self.T.append(t_til)
+        self.T.append(time.perf_counter() - self.request_time)
 
-        throughput = msg.get_bit_length() / t_til
+        throughput = msg.get_bit_length() / self.T[-1]
 
         self.X_til.append(throughput)
 
